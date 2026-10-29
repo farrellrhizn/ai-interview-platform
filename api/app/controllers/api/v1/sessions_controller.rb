@@ -59,7 +59,7 @@ module Api
       # POST /api/v1/sessions/:id/end
       def end_session
         if @session.ended?
-          return json_error("Session is already ended", :unprocessable_entity)
+          return json_response(session: session_json(@session))
         end
 
         reason = params.dig(:session, :reason) || "manual_assessor"

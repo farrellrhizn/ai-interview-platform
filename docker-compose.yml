@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rakamin_development
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    command: bash -c "rm -f tmp/pids/server.pid && bundle exec rails db:prepare && bundle exec rails server -b 0.0.0.0 -p 3001"
+    volumes:
+      - ./api:/app
+    ports:
+      - "3001:3001"
+    environment:
+      RAILS_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: rakamin_development
+      REDIS_URL: redis://redis:6379/1
+      APP_BASE_URL: http://localhost:5173
+      ALLOWED_ORIGINS: "*"
+      WEB_CONCURRENCY: "0"
+      GEMINI_LIVE_MODEL: gemini-3.1-flash-live-preview
+    depends_on:
+      - postgres
+      - redis
+
+  sidekiq:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    command: bundle exec sidekiq -r ./config/environment.rb -C config/sidekiq.yml
+    volumes:
+      - ./api:/app
+    environment:
+      RAILS_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: rakamin_development
+      REDIS_URL: redis://redis:6379/1
+      APP_BASE_URL: http://localhost:5173
+      ALLOWED_ORIGINS: "*"
+      GEMINI_LIVE_MODEL: gemini-3.1-flash-live-preview
+    depends_on:
+      - postgres
+      - redis
+
+volumes:
+  pgdata:

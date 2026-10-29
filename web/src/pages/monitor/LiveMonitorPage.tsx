@@ -118,6 +118,7 @@ export default function LiveMonitorPage() {
 
   const handleEndSession = async () => {
     setEnding(true);
+    setEndError(false);
     try {
       await sessionsApi.endSession(Number(sessionId));
       navigate(`/assessments/${id}/sessions/${sessionId}/portfolio`);
