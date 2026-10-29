@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { sessionsApi } from "@/services/sessions";
@@ -8,6 +8,10 @@ import type { TranscriptTurn } from "@/types";
 
 export default function TranscriptPage() {
   const { id, sessionId } = useParams<{ id: string; sessionId: string }>();
+  const location = useLocation();
+  const backTo =
+    (location.state as { from?: string } | null)?.from ??
+    `/assessments/${id}/sessions/${sessionId}/portfolio`;
   const [turns, setTurns] = useState<TranscriptTurn[]>([]);
   const [candidateName, setCandidateName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,7 +49,7 @@ export default function TranscriptPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Link
-            to={`/assessments/${id}/sessions/${sessionId}/portfolio`}
+            to={backTo}
             className="text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />

@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { assessmentsApi } from "@/services/assessments";
 import { LEVEL_LABELS } from "@/utils/constants";
-import { ArrowLeft, Copy, Check, Eye, Pencil, Clock, Plus, UserRound } from "lucide-react";
+import { ArrowLeft, Copy, Check, Eye, Pencil, Clock, Plus, UserRound, FileText } from "lucide-react";
 import type { Assessment, Session } from "@/types";
 
 function SessionRow({
@@ -48,6 +48,12 @@ function SessionRow({
           {session.started_at && (
             <div className="text-xs text-muted-foreground">
               {new Date(session.started_at).toLocaleDateString()}
+              {session.duration_seconds != null && session.duration_seconds > 0 && (
+                <span>
+                  {" "}
+                  · {Math.floor(session.duration_seconds / 60)}m {session.duration_seconds % 60}s
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -102,6 +108,20 @@ function SessionRow({
               onClick={() => navigate(`/assessments/${assessmentId}/sessions/${session.id}/monitor`)}
             >
               <Eye className="h-3 w-3 mr-1" /> Monitor
+            </Button>
+          )}
+          {isEnded && session.end_reason === "error" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() =>
+                navigate(`/assessments/${assessmentId}/sessions/${session.id}/transcript`, {
+                  state: { from: `/assessments/${assessmentId}/invite` },
+                })
+              }
+            >
+              <FileText className="h-3 w-3 mr-1" /> Transcript
             </Button>
           )}
           {isEnded && session.end_reason !== "error" && (
