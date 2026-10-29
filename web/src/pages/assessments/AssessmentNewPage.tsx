@@ -257,6 +257,7 @@ export default function AssessmentNewPage() {
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         onSelect={addB7Skill}
+        excludeLabels={(watch("skills") ?? []).map((s) => s.skill_label ?? "").filter(Boolean)}
       />
     </div>
   );

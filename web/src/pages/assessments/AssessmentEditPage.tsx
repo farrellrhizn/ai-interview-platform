@@ -36,22 +36,30 @@ export default function AssessmentEditPage() {
   const [submitting, setSubmitting] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deletedSkillIds, setDeletedSkillIds] = useState<number[]>([]);
 
   const form = useForm<AssessmentFormValues>({
-    defaultValues: { name: "", time_limit_min: 45, skills: [] },
+    defaultValues: { name: "", time_limit_min: 45, language: "en", skills: [] },
   });
 
-  const { register, handleSubmit, control, setValue, reset, formState: { errors } } = form;
+  const { register, handleSubmit, control, setValue, watch, getValues, reset, formState: { errors } } = form;
   const { fields, append, remove, move } = useFieldArray({ control, name: "skills" });
+  const watchedSkills = watch("skills") ?? [];
 
   useEffect(() => {
     assessmentsApi
       .get(Number(id))
       .then((res) => {
         const a = res.data.assessment;
-        reset({ name: a.name, time_limit_min: a.time_limit_min, skills: a.skills });
+        setDeletedSkillIds([]);
+        reset({
+          name: a.name,
+          time_limit_min: a.time_limit_min,
+          language: a.language ?? "en",
+          skills: a.skills ?? [],
+        });
       })
-      .catch(() => {})
+      .catch(() => setError("Failed to load assessment."))
       .finally(() => setLoading(false));
   }, [id, reset]);
 
@@ -69,15 +77,30 @@ export default function AssessmentEditPage() {
     }
   };
 
+  const handleRemoveSkill = (index: number) => {
+    const target = getValues(`skills.${index}`);
+    if (target?.id) {
+      setDeletedSkillIds((prev) => (prev.includes(target.id!) ? prev : [...prev, target.id!]));
+    }
+    remove(index);
+  };
+
   const onSubmit = async (data: AssessmentFormValues) => {
     if (data.skills.length === 0) { setError("Add at least one skill."); return; }
     setError(null);
     setSubmitting(true);
     try {
+      const activeSkills = data.skills.map((s, i) => ({ ...s, display_order: i }));
+      const destroyedSkills: Partial<AssessmentSkill>[] = deletedSkillIds.map((skillDbId) => ({
+        id: skillDbId,
+        _destroy: true,
+      }));
+
       await assessmentsApi.update(Number(id), {
         name: data.name,
         time_limit_min: data.time_limit_min,
-        assessment_skills_attributes: data.skills.map((s, i) => ({ ...s, display_order: i })),
+        language: data.language,
+        assessment_skills_attributes: [...activeSkills, ...destroyedSkills],
       });
       navigate(`/assessments/${id}/invite`);
     } catch (e: any) {
@@ -115,19 +138,35 @@ export default function AssessmentEditPage() {
           <Input id="name" {...register("name", { required: true })} />
         </div>
 
-        <div className="space-y-1.5">
-          <Label>Session time limit <span className="text-destructive">*</span></Label>
-          <Select
-            value={String(form.watch("time_limit_min"))}
-            onValueChange={(v) => setValue("time_limit_min", Number(v))}
-          >
-            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {TIME_LIMIT_OPTIONS.map((min) => (
-                <SelectItem key={min} value={String(min)}>{min} min</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex flex-wrap gap-6">
+          <div className="space-y-1.5">
+            <Label>Session time limit <span className="text-destructive">*</span></Label>
+            <Select
+              value={String(watch("time_limit_min"))}
+              onValueChange={(v) => setValue("time_limit_min", Number(v))}
+            >
+              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {TIME_LIMIT_OPTIONS.map((min) => (
+                  <SelectItem key={min} value={String(min)}>{min} min</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Interview language</Label>
+            <Select
+              value={watch("language") ?? "en"}
+              onValueChange={(v) => setValue("language", v as "en" | "id")}
+            >
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="en">English</SelectItem>
+                <SelectItem value="id">Indonesian</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <Separator />
@@ -143,7 +182,7 @@ export default function AssessmentEditPage() {
               <SortableContext items={fields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
                 <div className="space-y-2">
                   {fields.map((field, index) => (
-                    <SkillCard key={field.id} id={field.id} index={index} form={form} onRemove={() => remove(index)} />
+                    <SkillCard key={field.id} id={field.id} index={index} form={form} onRemove={() => handleRemoveSkill(index)} />
                   ))}
                 </div>
               </SortableContext>
@@ -151,7 +190,7 @@ export default function AssessmentEditPage() {
           )}
           <div className="flex gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => setPickerOpen(true)}>
-              <Plus className="h-3.5 w-3.5 mr-1" /> Add from B7 taxonomy
+              <Plus className="h-3.5 w-3.5 mr-1" /> Add from Skill Taxonomy
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => append({ skill_label: "", is_custom: true, expected_level: 3, display_order: fields.length })}>
               <Plus className="h-3.5 w-3.5 mr-1" /> Add custom skill
@@ -171,7 +210,12 @@ export default function AssessmentEditPage() {
         </div>
       </form>
 
-      <SkillPicker open={pickerOpen} onOpenChange={setPickerOpen} onSelect={(s) => append({ ...s, display_order: fields.length })} />
+      <SkillPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onSelect={(s) => append({ ...s, display_order: fields.length })}
+        excludeLabels={watchedSkills.map((s) => s.skill_label ?? "").filter(Boolean)}
+      />
     </div>
   );
 }

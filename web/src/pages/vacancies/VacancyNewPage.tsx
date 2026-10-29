@@ -78,23 +78,33 @@ export default function VacancyNewPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {fields.map((field, index) => (
-                <div key={field.id} className="border rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{watch(`skills.${index}.skill_label`)}</span>
-                    <button type="button" onClick={() => remove(index)} className="text-muted-foreground hover:text-destructive">
-                      <X className="h-4 w-4" />
-                    </button>
+              {fields.map((field, index) => {
+                const skillCode = watch(`skills.${index}.skill_id`);
+                return (
+                  <div key={field.id} className="border rounded-lg p-3 space-y-2 bg-card">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm font-medium truncate">{watch(`skills.${index}.skill_label`)}</span>
+                        {skillCode && (
+                          <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
+                            {skillCode}
+                          </span>
+                        )}
+                      </div>
+                      <button type="button" onClick={() => remove(index)} aria-label="Remove skill" className="text-muted-foreground hover:text-destructive transition-colors">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-xs text-muted-foreground">Expected level:</span>
+                      <LevelRadio
+                        value={watch(`skills.${index}.expected_level`) ?? 3}
+                        onChange={(v) => setValue(`skills.${index}.expected_level`, v)}
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <span className="text-xs text-muted-foreground">Expected level:</span>
-                    <LevelRadio
-                      value={watch(`skills.${index}.expected_level`) ?? 3}
-                      onChange={(v) => setValue(`skills.${index}.expected_level`, v)}
-                    />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -140,6 +150,7 @@ export default function VacancyNewPage() {
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         onSelect={(s) => append({ skill_id: s.skill_id, skill_label: s.skill_label, expected_level: 3 })}
+        excludeLabels={(watch("skills") ?? []).map((s) => s.skill_label ?? "").filter(Boolean)}
       />
     </div>
   );

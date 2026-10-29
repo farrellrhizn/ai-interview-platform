@@ -24,6 +24,14 @@ export default function SkillCard({ index, id, form, onRemove }: SkillCardProps)
   const skill = useWatch({ control: form.control, name: `skills.${index}` });
   const isCustom = skill?.is_custom;
   const skillLabel = skill?.skill_label || "New Skill";
+  const rawSkillId = skill?.skill_id ? String(skill.skill_id).trim() : "";
+  const formattedSkillCode = isCustom
+    ? "Custom"
+    : rawSkillId
+    ? /^\d+$/.test(rawSkillId)
+      ? `SK-${rawSkillId.padStart(3, "0")}`
+      : rawSkillId.toUpperCase()
+    : "";
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -53,9 +61,11 @@ export default function SkillCard({ index, id, form, onRemove }: SkillCardProps)
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-medium text-sm truncate">{skillLabel}</span>
-            <span className="text-xs text-muted-foreground shrink-0">
-              {isCustom ? "Custom" : skill?.skill_id ? `SK-${String(skill.skill_id).padStart(3, "0")}` : ""}
-            </span>
+            {formattedSkillCode && (
+              <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
+                {formattedSkillCode}
+              </span>
+            )}
           </div>
         </div>
 

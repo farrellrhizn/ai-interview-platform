@@ -16,10 +16,12 @@ export interface SpeedThresholds {
     maxPingMs: number;
 }
 
+// PCM 16kHz mono voice streaming requires ~256 kbps (~0.25 Mbps).
+// Thresholds are calibrated for asymmetric residential/mobile connections in Indonesia.
 export const DEFAULT_THRESHOLDS: SpeedThresholds = {
-    minDownloadMbps: 8,
-    minUploadMbps: 4,
-    maxPingMs: 300,
+    minDownloadMbps: 2,
+    minUploadMbps: 1,
+    maxPingMs: 350,
 };
 
 const SPEED_TEST_PING_URL = import.meta.env.VITE_SPEED_TEST_PING_URL as string | undefined;
