@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,19 +17,23 @@ import VoiceBars from "@/components/interview/VoiceBars";
 import InterviewTimer from "@/components/interview/InterviewTimer";
 import ConnectionStatus from "@/components/interview/ConnectionStatus";
 import TranscriptBubble from "@/components/interview/TranscriptBubble";
+import CandidateConsentCard from "@/components/interview/CandidateConsentCard";
 import { useAudioCapture } from "@/hooks/useAudioCapture";
 import { useAudioPlayback } from "@/hooks/useAudioPlayback";
 import { useAudioWebSocket } from "@/hooks/useAudioWebSocket";
 import { sessionsApi } from "@/services/sessions";
 import HardwareCheck from "@/components/HardwareCheck";
-import { CheckCircle, Mic, MicOff } from "lucide-react";
+import { CheckCircle, Mic, MicOff, AlertTriangle, Link2Off, RefreshCw } from "lucide-react";
 import type { CandidateInfo, InterviewState, InterviewSpeaker, TranscriptTurn } from "@/types";
 
 export default function InterviewPage() {
   const { token } = useParams<{ token: string }>();
   const [candidateInfo, setCandidateInfo] = useState<CandidateInfo | null>(null);
   const [sessionId, setSessionId] = useState<number | null>(null);
+  const [loadingInfo, setLoadingInfo] = useState(true);
   const [interviewState, setInterviewState] = useState<InterviewState>("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const [speaker, setSpeaker] = useState<InterviewSpeaker>(null);
   const [transcript, setTranscript] = useState<Pick<TranscriptTurn, "speaker" | "text">[]>([]);
   const [hardwareCheckDone, setHardwareCheckDone] = useState(false); // kept for green banner
@@ -40,22 +45,54 @@ export default function InterviewPage() {
   const micMutedRef = useRef(false);
 
   // Fetch candidate info
-  useEffect(() => {
-    if (!token) return;
+  const loadCandidateSession = useCallback(() => {
+    if (!token) {
+      setLoadingInfo(false);
+      setInterviewState("invalid_link");
+      return;
+    }
+    setLoadingInfo(true);
+    setErrorMessage(null);
     sessionsApi.getCandidateInfo(token)
       .then((res) => {
         setCandidateInfo(res.data);
         setSessionId(res.data.session_id);
-        if (res.data.session_status === "ended") setInterviewState("complete");
+        if (res.data.session_status === "failed" || res.data.end_reason === "error") {
+          setErrorMessage(
+            "This interview session encountered a technical interruption earlier. Please contact the recruitment team if you need a new invitation link."
+          );
+          setInterviewState("error");
+        } else if (res.data.session_status === "ended") {
+          setInterviewState("complete");
+        } else {
+          setInterviewState("idle");
+        }
       })
-      .catch(() => setInterviewState("complete"));
+      .catch((err: any) => {
+        if (err?.response?.status === 404) {
+          setInterviewState("invalid_link");
+        } else {
+          setErrorMessage("Unable to reach the interview server. Please check your internet connection and try again.");
+          setInterviewState("error");
+        }
+      })
+      .finally(() => setLoadingInfo(false));
   }, [token]);
+
+  useEffect(() => {
+    loadCandidateSession();
+  }, [loadCandidateSession]);
 
   const muteRef = useRef<(() => void) | null>(null);
   const unmuteRef = useRef<(() => void) | null>(null);
+  const stopCaptureRef = useRef<(() => void) | null>(null);
 
   const handleStateChange = useCallback((state: InterviewState) => {
     setInterviewState(state);
+
+    if (state === "error" || state === "complete") {
+      stopCaptureRef.current?.();
+    }
 
     if (state === "draining_audio") {
       // Mute mic, stop sending — wait for audio queue to drain then call audio_complete
@@ -138,6 +175,7 @@ export default function InterviewPage() {
     onStateChange: handleStateChange,
     onSpeakerChange: handleSpeakerChange,
     onReconnected: handleReconnected,
+    onError: setErrorMessage,
   });
 
   const { start: startCapture, stop: stopCapture, mute, unmute } = useAudioCapture({
@@ -146,6 +184,7 @@ export default function InterviewPage() {
 
   muteRef.current = mute;
   unmuteRef.current = unmute;
+  stopCaptureRef.current = stopCapture;
 
   const toggleMic = useCallback(() => {
     if (micMutedRef.current) {
@@ -187,6 +226,44 @@ export default function InterviewPage() {
       ? "connected"
       : "reconnecting";
 
+  if (loadingInfo) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-8 space-y-4 w-full">
+        <Skeleton className="h-7 w-56 mx-auto" />
+        <Skeleton className="h-64 w-full rounded-lg" />
+      </div>
+    );
+  }
+
+  if (interviewState === "invalid_link") {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-16 text-center space-y-4">
+        <Link2Off className="h-10 w-10 text-destructive mx-auto" />
+        <h2 className="text-xl font-semibold">Invalid or Expired Interview Link</h2>
+        <p className="text-sm text-muted-foreground">
+          We couldn&apos;t find an interview invitation matching this URL. No interview has been recorded.
+          <br />
+          Please check the full link or contact the recruitment team for a new invitation.
+        </p>
+      </div>
+    );
+  }
+
+  if (interviewState === "error") {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-16 text-center space-y-4">
+        <AlertTriangle className="h-10 w-10 text-amber-600 mx-auto" />
+        <h2 className="text-xl font-semibold">Session Interrupted</h2>
+        <p className="text-sm text-muted-foreground">
+          {errorMessage || "A technical or network issue interrupted the interview session."}
+        </p>
+        <Button variant="outline" size="sm" onClick={loadCandidateSession}>
+          <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Check Session Status
+        </Button>
+      </div>
+    );
+  }
+
   // ── State A: Pre-start ──────────────────────────────────────────────────
   if (interviewState === "idle") {
     return (
@@ -200,7 +277,13 @@ export default function InterviewPage() {
           )}
         </div>
 
-        {!hardwareCheckDone ? (
+        {!consentAccepted ? (
+          <CandidateConsentCard
+            roleTitle={candidateInfo?.role_title}
+            timeLimitMin={candidateInfo?.time_limit_min}
+            onConsentAccepted={() => setConsentAccepted(true)}
+          />
+        ) : !hardwareCheckDone ? (
           <div className="space-y-4">
             <div className="bg-muted/50 rounded-lg p-4 text-sm space-y-1.5 text-muted-foreground">
               <p>• This is a voice interview. Make sure you're in a quiet place.</p>
