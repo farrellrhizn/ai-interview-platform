@@ -8,7 +8,7 @@ module FitGap
       @portfolio = portfolio
       @vacancy   = vacancy
       @gemini_client = gemini_client || Gemini::HttpClient.new(
-        model:   ENV.fetch('GEMINI_FLASH_MODEL', 'gemini-2.0-flash-001'),
+        model:   ENV.fetch('GEMINI_FLASH_MODEL', 'gemini-3-flash-preview'),
         timeout: 30
       )
     end
@@ -37,36 +37,37 @@ module FitGap
     private
 
     def build_skill_comparisons
-      vacancy_skills = @vacancy.vacancy_skills.index_by(&:skill_label)
-      portfolio_skills = effective_portfolio_skills  # includes overrides
+      portfolio_skills = effective_portfolio_skills # includes overrides
 
-      comparisons = vacancy_skills.map do |label, vacancy_skill|
+      @vacancy.vacancy_skills.order(:id).map do |vacancy_skill|
+        label           = vacancy_skill.skill_label
         portfolio_skill = find_portfolio_skill(portfolio_skills, label, vacancy_skill.skill_id)
+        expected_level  = vacancy_skill.expected_level
 
         if portfolio_skill
-          candidate_level  = portfolio_skill[:effective_level]
-          expected_level   = vacancy_skill.expected_level
-          delta            = candidate_level - expected_level
-          result           = delta == 0 ? 'match' : (delta > 0 ? 'exceed' : 'gap')
+          candidate_level = portfolio_skill[:effective_level]
+          delta           = candidate_level - expected_level
+          result          = delta.zero? ? 'match' : (delta.positive? ? 'exceed' : 'gap')
         else
           candidate_level = nil
-          expected_level  = vacancy_skill.expected_level
           delta           = nil
           result          = 'not_assessed'
         end
 
         {
           skill_label:     label,
-          skill_id:        vacancy_skill.skill_id,
+          skill_id:        vacancy_skill.skill_id || portfolio_skill&.dig(:skill_id),
           candidate_level: candidate_level,
           expected_level:  expected_level,
+          required_level:  expected_level,
+          ai_level:        portfolio_skill&.dig(:ai_level),
+          is_override:     portfolio_skill ? portfolio_skill[:overridden] : false,
+          assessor_notes:  portfolio_skill&.dig(:assessor_notes),
           result:          result,
           delta:           delta,
           confidence:      portfolio_skill&.dig(:confidence)
         }
       end
-
-      comparisons
     end
 
     # Returns portfolio skills with overrides applied.
@@ -80,14 +81,20 @@ module FitGap
           ai_level:        skill.ai_level,
           effective_level: override ? override.override_level : skill.ai_level,
           confidence:      skill.ai_confidence,
-          overridden:      override.present?
+          overridden:      override.present?,
+          assessor_notes:  override&.assessor_notes
         }
       end
     end
 
     def find_portfolio_skill(portfolio_skills, label, skill_id)
-      portfolio_skills.find { |s| s[:skill_id] == skill_id && skill_id.present? } ||
-        portfolio_skills.find { |s| s[:skill_label].downcase == label.downcase }
+      if skill_id.present?
+        matched_by_id = portfolio_skills.find { |s| s[:skill_id].present? && s[:skill_id].casecmp?(skill_id) }
+        return matched_by_id if matched_by_id
+      end
+
+      normalized_label = label.to_s.strip.downcase
+      portfolio_skills.find { |s| s[:skill_label].to_s.strip.downcase == normalized_label }
     end
 
     def generate_narratives(skill_comparisons)
