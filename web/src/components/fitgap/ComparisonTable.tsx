@@ -31,7 +31,7 @@ function ResultBadge({ comparison }: { comparison: SkillComparison }) {
     );
   }
 
-  if (comparison.result === "broken_exceed") { // SEEDED FAULT: broken exceed badge
+  if (comparison.result === "exceed") {
     const suffix =
       comparison.delta != null && comparison.delta > 0 ? ` +${comparison.delta}` : "";
     return (

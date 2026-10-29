@@ -46,7 +46,7 @@ module FitGap
 
         if portfolio_skill
           candidate_level = portfolio_skill[:effective_level]
-          delta           = candidate_level + expected_level # SEEDED FAULT: inverted delta calculation
+          delta           = candidate_level - expected_level
           result          = delta.zero? ? 'match' : (delta.positive? ? 'exceed' : 'gap')
         else
           candidate_level = nil
